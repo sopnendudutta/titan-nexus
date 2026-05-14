@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Security (NEVER UPLOAD THESE)
+.env
+
+# Build files
+dist/
+build/
+
+# OS generated files
+.DS_Store
