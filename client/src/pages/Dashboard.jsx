@@ -53,17 +53,22 @@ export default function Dashboard() {
         setSortConfig({ key, direction });
     };
 
+
     const fetchProducts = async () => {
         const token = localStorage.getItem('token');
         try {
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/products`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setTimeout(() => {
-                setProducts(res.data.data);
-                setLoading(false);
-            }, 1000);
-        } catch (err) { navigate('/login'); }
+            setProducts(res.data.data);
+            setLoading(false);
+        } catch (err) {
+            if (err.response?.status === 401) {
+                navigate('/login'); // Only redirect if token is dead
+            } else {
+                showToast(err.response?.data?.message || "Failed to load vault data");
+            }
+        }
     };
 
     // Calculate Vault Metrics (Command Center)
