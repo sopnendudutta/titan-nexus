@@ -5,21 +5,18 @@ const catchAsync = require('../utils/catchAsync');
 exports.protect = catchAsync(async (req, res, next) => {
     let token;
 
-    // checking if the token exists in the header
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         token = req.headers.authorization.split(' ')[1];
     }
 
-    if (!token) {
+    // 🚨 FIX: Explicitly check for the string "null"
+    if (!token || token === 'null') {
         const error = new Error('You are not logged in. Please login to get access');
         error.statusCode = 401;
         throw error;
     }
 
-    // if we get back a token , we shall verify it 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // lets verify the user if they do exist by trying to find their id 
     const currentUser = await User.findById(decoded.id);
 
     if (!currentUser) {
@@ -30,7 +27,6 @@ exports.protect = catchAsync(async (req, res, next) => {
 
     req.user = currentUser;
     next();
-
 });
 
 exports.restrictTo = (...roles) => {
