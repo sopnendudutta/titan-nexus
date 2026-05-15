@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
-
 
 export default function Dashboard() {
     const [products, setProducts] = useState([]);
@@ -11,8 +10,9 @@ export default function Dashboard() {
     const [isDarkMode, setIsDarkMode] = useState(true);
     const navigate = useNavigate();
 
-    // Toast Notification State
+    // Toast Notification State & Ref
     const [toast, setToast] = useState({ show: false, message: '', type: 'error' });
+    const toastTimerRef = useRef(null);
 
     // Search, Sort & Pagination States
     const [searchTerm, setSearchTerm] = useState('');
@@ -23,19 +23,11 @@ export default function Dashboard() {
     // Kebab Dropdown State
     const [openDropdown, setOpenDropdown] = useState(null);
 
-    // Close dropdown when clicking outside of it
-    useEffect(() => {
-        const closeDropdown = () => setOpenDropdown(null);
-        document.addEventListener('click', closeDropdown);
-        return () => document.removeEventListener('click', closeDropdown);
-    }, []);
-
     // Modal States
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [productToDelete, setProductToDelete] = useState(null);
-
 
     // Form States
     const [editingProduct, setEditingProduct] = useState(null);
@@ -43,7 +35,50 @@ export default function Dashboard() {
         sku: '', name: '', description: '', price: '', quantity: '', category_id: '', reorder_level: ''
     });
 
-    useEffect(() => { fetchProducts(); }, []);
+    // --- Core Effects ---
+
+    // Clean up dropdowns on outside click
+    useEffect(() => {
+        const closeDropdown = () => setOpenDropdown(null);
+        document.addEventListener('click', closeDropdown);
+        return () => document.removeEventListener('click', closeDropdown);
+    }, []);
+
+    // Clean up toast timers on unmount to prevent memory leaks
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        fetchProducts();
+    }, []);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
+    // --- Utility Functions ---
+
+    // Robust Toast Helper
+    const showToast = (message, type = 'error') => {
+        setToast({ show: true, message, type });
+
+        // Clear any existing timer so toasts don't overlap and hide early
+        if (toastTimerRef.current) {
+            clearTimeout(toastTimerRef.current);
+        }
+
+        toastTimerRef.current = setTimeout(() => {
+            setToast(prev => ({ ...prev, show: false }));
+        }, 4000);
+    };
+
+    const handleAuthError = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
 
     const handleSort = (key) => {
         let direction = 'asc';
@@ -53,9 +88,16 @@ export default function Dashboard() {
         setSortConfig({ key, direction });
     };
 
+    // --- API Calls ---
 
     const fetchProducts = async () => {
         const token = localStorage.getItem('token');
+
+        // Pre-check: Don't bother pinging the server if there is no token
+        if (!token) {
+            return handleAuthError();
+        }
+
         try {
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/products`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -63,15 +105,84 @@ export default function Dashboard() {
             setProducts(res.data.data);
             setLoading(false);
         } catch (err) {
-            if (err.response?.status === 401) {
-                navigate('/login'); // Only redirect if token is dead
+            if (err.response?.status === 401 || err.response?.status === 403) {
+                handleAuthError();
             } else {
-                showToast(err.response?.data?.message || "Failed to load vault data");
+                showToast(err.response?.data?.message || "Failed to load vault data", "error");
+                setLoading(false);
             }
         }
     };
 
-    // Calculate Vault Metrics (Command Center)
+    const handleAddProduct = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+        const payload = {
+            sku: newProduct.sku,
+            name: newProduct.name,
+            description: newProduct.description,
+            price: parseFloat(newProduct.price),
+            quantity: parseInt(newProduct.quantity, 10),
+            category_id: parseInt(newProduct.category_id, 10),
+            reorder_level: parseInt(newProduct.reorder_level, 10)
+        };
+
+        try {
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/products`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            showToast("Item successfully registered to vault", "success");
+            setIsAddModalOpen(false);
+            setNewProduct({ sku: '', name: '', description: '', price: '', quantity: '', category_id: '', reorder_level: '' });
+            fetchProducts();
+        } catch (err) {
+            if (err.response?.status === 401) return handleAuthError();
+            showToast(err.response?.data?.message || "Validation Error: Could not add item", "error");
+        }
+    };
+
+    const updateStock = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+        try {
+            await axios.patch(`${import.meta.env.VITE_API_URL}/api/products/${editingProduct.sku}`,
+                { newQuantity: parseInt(editingProduct.quantity, 10) },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setIsEditModalOpen(false);
+            showToast(`Stock for ${editingProduct.sku} updated successfully`, "success");
+            fetchProducts();
+        } catch (err) {
+            if (err.response?.status === 401) return handleAuthError();
+            showToast(err.response?.data?.message || "Failed to update stock", "error");
+        }
+    };
+
+    const initiateDelete = (product) => {
+        setProductToDelete(product);
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!productToDelete) return;
+        const token = localStorage.getItem('token');
+        try {
+            await axios.delete(`${import.meta.env.VITE_API_URL}/api/products/${productToDelete.sku}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            showToast(`Item ${productToDelete.sku} purged from the system`, "success");
+            setIsDeleteModalOpen(false);
+            setProductToDelete(null);
+            fetchProducts();
+        } catch (err) {
+            if (err.response?.status === 401) return handleAuthError();
+            showToast(err.response?.data?.message || "Admin clearance required to delete items", "error");
+            setIsDeleteModalOpen(false);
+        }
+    };
+
+    // --- Data Processing (Memoized) ---
+
     const vaultMetrics = useMemo(() => {
         let totalValue = 0;
         let lowStockCount = 0;
@@ -88,7 +199,6 @@ export default function Dashboard() {
         };
     }, [products]);
 
-    // Prepare Data for the Graph (Top 5 Highest Stock Items)
     const chartData = useMemo(() => {
         return [...products]
             .sort((a, b) => b.quantity - a.quantity)
@@ -99,13 +209,6 @@ export default function Dashboard() {
             }));
     }, [products]);
 
-    // Helper to trigger toasts
-    const showToast = (message, type = 'error') => {
-        setToast({ show: true, message, type });
-        setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 4000);
-    };
-
-    // LIVE SEARCH & SORT LOGIC
     const filteredProducts = useMemo(() => {
         let processedData = products.filter(p =>
             p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -132,79 +235,13 @@ export default function Dashboard() {
     const currentItems = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
-    useEffect(() => { setCurrentPage(1); }, [searchTerm]);
-
-    const handleAddProduct = async (e) => {
-        e.preventDefault();
-        const token = localStorage.getItem('token');
-        const payload = {
-            sku: newProduct.sku,
-            name: newProduct.name,
-            description: newProduct.description,
-            price: parseFloat(newProduct.price),
-            quantity: parseInt(newProduct.quantity, 10),
-            category_id: parseInt(newProduct.category_id, 10),
-            reorder_level: parseInt(newProduct.reorder_level, 10)
-        };
-
-        try {
-            await axios.post(`${import.meta.env.VITE_API_URL}/api/products`, payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast("Item successfully registered to vault", "success");
-            setIsAddModalOpen(false);
-            setNewProduct({ sku: '', name: '', description: '', price: '', quantity: '', category_id: '', reorder_level: '' });
-            fetchProducts();
-        } catch (err) {
-            showToast(err.response?.data?.message || "Validation Error: Could not add item", "error");
-        }
-    };
-
-    const updateStock = async (e) => {
-        e.preventDefault();
-        const token = localStorage.getItem('token');
-        try {
-            await axios.patch(`${import.meta.env.VITE_API_URL}/api/products/${editingProduct.sku}`,
-                { newQuantity: parseInt(editingProduct.quantity, 10) },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setIsEditModalOpen(false);
-            showToast(`Stock for ${editingProduct.sku} updated successfully`, "success");
-            fetchProducts();
-        } catch (err) {
-            showToast(err.response?.data?.message || "Failed to update stock", "error");
-        }
-    };
-
-    //   Opens the custom confirmation modal
-    const initiateDelete = (product) => {
-        setProductToDelete(product);
-        setIsDeleteModalOpen(true);
-    };
-
-    //  Executes the actual deletion after confirmation
-    const confirmDelete = async () => {
-        if (!productToDelete) return;
-        const token = localStorage.getItem('token');
-        try {
-            await axios.delete(`${import.meta.env.VITE_API_URL}/api/products/${productToDelete.sku}`, { // ✅ FIXED
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast(`Item ${productToDelete.sku} purged from the system`, "success");
-            setIsDeleteModalOpen(false);
-            setProductToDelete(null);
-            fetchProducts();
-        } catch (err) {
-            showToast(err.response?.data?.message || "Admin clearance required to delete items", "error");
-            setIsDeleteModalOpen(false);
-        }
-    };
+    // --- Render ---
 
     return (
         <div className={`dashboard-wrapper ${isDarkMode ? '' : 'light-theme'}`}>
             <div className="container">
 
-                {/* 1. HEADER ROW */}
+                {/* HEADER ROW */}
                 <div className="header">
                     <div>
                         <h1>Inventory</h1>
@@ -213,7 +250,7 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                         <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>Add Item</button>
                         <button className="btn" onClick={() => setIsDarkMode(!isDarkMode)}>{isDarkMode ? '☀️' : '🌙'}</button>
-                        <button className="morph-btn" onClick={() => { localStorage.removeItem('token'); navigate('/login'); }}>
+                        <button className="morph-btn" onClick={handleAuthError}>
                             <span className="icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                             </span>
@@ -222,7 +259,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* 2. SEARCH ROW */}
+                {/* SEARCH ROW */}
                 <div className="search-row">
                     <div className="search-container" style={{ margin: 0, width: '100%' }}>
                         <svg className="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -236,7 +273,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* 3. COMMAND CENTER & WIDE GRAPH */}
+                {/* COMMAND CENTER & WIDE GRAPH */}
                 {!loading && products.length > 0 && (
                     <div className="command-center-stack">
                         <div className="metrics-row">
@@ -276,15 +313,15 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                {/* 4. INVENTORY TABLE */}
+                {/* INVENTORY TABLE */}
                 {loading ? (
                     <div className="table-responsive">
                         <table>
                             <thead>
                                 <tr>
-                                    <th className="sortable-th" onClick={() => handleSort('sku')}>SKU</th>
-                                    <th className="sortable-th" onClick={() => handleSort('name')}>NAME</th>
-                                    <th className="sortable-th" onClick={() => handleSort('quantity')}>STOCK</th>
+                                    <th className="sortable-th">SKU</th>
+                                    <th className="sortable-th">NAME</th>
+                                    <th className="sortable-th">STOCK</th>
                                     <th style={{ textAlign: 'right' }}>ACTIONS</th>
                                 </tr>
                             </thead>
@@ -352,7 +389,7 @@ export default function Dashboard() {
                                                         Adjust Stock
                                                     </button>
                                                     <button className="danger-action" onClick={() => {
-                                                        initiateDelete(p); // 🚨 Now passes the whole product object to our custom modal
+                                                        initiateDelete(p);
                                                         setOpenDropdown(null);
                                                     }}>
                                                         Delete Item
@@ -468,7 +505,6 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                {/*  MINIMAL CONFIRM DELETE MODAL */}
                 {isDeleteModalOpen && productToDelete && (
                     <div className="overlay">
                         <div className="modal">
@@ -485,8 +521,6 @@ export default function Dashboard() {
                                 >
                                     Cancel
                                 </button>
-
-                                {/* 🚨 THE NEW MINIMAL BUTTON */}
                                 <button
                                     type="button"
                                     className="btn-danger-minimal"
@@ -508,7 +542,10 @@ export default function Dashboard() {
                                 <span>{toast.type === 'success' ? '✅' : '🚨'}</span>
                                 <span className="toast-message">{toast.message}</span>
                             </div>
-                            <button className="toast-close" onClick={() => setToast({ ...toast, show: false })}>✕</button>
+                            <button className="toast-close" onClick={() => {
+                                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                                setToast({ ...toast, show: false });
+                            }}>✕</button>
                         </div>
                     </div>
                 )}
