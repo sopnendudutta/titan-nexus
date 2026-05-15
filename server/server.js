@@ -28,14 +28,14 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.error('❌ MongoDB Connection Failed:', err));
 
 // adding rate limiter 
-const apiLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // creating a 1 minute window
-    max: 500, // limiting the req to 10 per IP
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // creating a 15 minute window
+    max: 100, // limiting the req to 10 per IP
     message: {
         success: false,
         message: 'Security Alert: Too many requests ! Try again after 60 seconds.'
     },
-    standardHeader: true, // return the rate-limit info to the header in rate-limit section
+    standardHeaders: true, // return the rate-limit info to the header in rate-limit section
     legacyHeaders: false  // disable the previous rate-limiter
 })
 
