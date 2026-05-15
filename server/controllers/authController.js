@@ -5,9 +5,10 @@ const catchAsync = require('../utils/catchAsync');
 
 // Helper to sign with jwt 
 const signToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
-    );
+    return jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+        // This uses the env variable, but falls back to 1 day if the env is broken
+        expiresIn: process.env.JWT_EXPIRES_IN || '1d'
+    });
 };
 
 // Registering new user
