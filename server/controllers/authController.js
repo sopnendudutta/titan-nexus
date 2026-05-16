@@ -13,7 +13,7 @@ const signToken = (id) => {
 
 // Registering new user
 exports.signup = catchAsync(async (req, res, next) => {
-    // 🚨 FIX: Extract 'username' from req.body
+    // FIX: Extract 'username' from req.body
     const { username, email, password, role } = req.body;
 
     const newUser = await User.create({

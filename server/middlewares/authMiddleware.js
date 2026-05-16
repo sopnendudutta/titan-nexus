@@ -9,7 +9,7 @@ exports.protect = catchAsync(async (req, res, next) => {
         token = req.headers.authorization.split(' ')[1];
     }
 
-    // 🚨 FIX: Explicitly check for the string "null"
+    // FIX: Explicitly check for the string "null"
     if (!token || token === 'null') {
         const error = new Error('You are not logged in. Please login to get access');
         error.statusCode = 401;
