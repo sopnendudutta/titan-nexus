@@ -13,11 +13,10 @@ const signToken = (id) => {
 
 // Registering new user
 exports.signup = catchAsync(async (req, res, next) => {
-    // FIX: Extract 'username' from req.body
-    const { username, email, password, role } = req.body;
+    // 🚨 Removed username from destructuring
+    const { email, password, role } = req.body;
 
     const newUser = await User.create({
-        username, // 👈 Explicitly passing the username to MongoDB
         email,
         password,
         role
@@ -31,7 +30,6 @@ exports.signup = catchAsync(async (req, res, next) => {
         data: {
             user: {
                 id: newUser._id,
-                username: newUser.username, // 👈 Returning it to the frontend
                 email: newUser.email,
                 role: newUser.role
             }
