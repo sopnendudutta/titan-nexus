@@ -21,7 +21,6 @@ const LoginRegister = () => {
     };
 
     const [registerData, setRegisterData] = useState({
-        username: "",
         email: "",
         password: "",
         role: "Staff"
