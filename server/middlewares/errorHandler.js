@@ -6,19 +6,20 @@ const errorHandler = (err, req, res, next) => {
     let statusCode = err.statusCode || 500;
     let message = err.message || "Internal Server Error";
 
-    // 🚨 NEW: Catch Duplicate User/Email errors
+    // 🚨 CATCH MONGODB DUPLICATE KEY ERRORS
     if (err.code === 11000) {
         statusCode = 400;
         const field = Object.keys(err.keyValue)[0];
         message = `Registration Denied: That ${field} is already in use.`;
     }
 
-    // 🚨 NEW: Catch MongoDB Validation Errors (Missing fields)
+    // 🚨 CATCH MONGODB MISSING FIELD ERRORS
     if (err.name === 'ValidationError') {
         statusCode = 400;
         message = Object.values(err.errors).map(val => val.message).join(', ');
     }
 
+    // MAP JWT ERRORS
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
         statusCode = 401;
         message = 'Invalid or expired token. Security protocol initiated.';
