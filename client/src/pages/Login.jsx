@@ -20,12 +20,16 @@ const LoginRegister = () => {
         setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 4000);
     };
 
+
+    {/* registration requirement */ }
     const [registerData, setRegisterData] = useState({
         email: "",
         password: "",
         role: "Staff"
     });
 
+
+    {/* registration requirement */ }
     const [loginData, setLoginData] = useState({
         email: "",
         password: "",
@@ -67,7 +71,7 @@ const LoginRegister = () => {
     return (
         <div className={`login-page-wrapper ${isDarkMode ? 'dark-theme' : 'light-theme'}`}>
 
-            {/* 🚨 NEW: Custom Toast UI */}
+            {/* NEW: Custom Toast UI */}
             {toast.show && (
                 <div className="toast-container">
                     <div className={`toast ${toast.type}`}>
@@ -85,13 +89,15 @@ const LoginRegister = () => {
             </button>
 
             <div className={`container ${isActive ? "active" : ""}`} id="container">
+
+                {/* registration form */}
                 <div className="form-container sign-up">
                     <form onSubmit={handleRegister}>
                         <h1>Create Account</h1>
                         <span>Initialize new Nexus protocol</span>
-                        <input type="text" placeholder="Username" name="username" value={registerData.username} onChange={handleRegisterChange} required />
+                        {/*  Username input deleted here */}
                         <input type="email" placeholder="Email" name="email" value={registerData.email} onChange={handleRegisterChange} required />
-                        {/* here we define password visible/invisible functionality */}
+
                         <div className="password-container">
                             <input type={showRegisterPassword ? "text" : "password"} placeholder="Password" name="password" value={registerData.password} onChange={handleRegisterChange} required />
                             <button type="button" className="password-toggle" onClick={() => setShowRegisterPassword(!showRegisterPassword)}>
@@ -110,6 +116,8 @@ const LoginRegister = () => {
                     </form>
                 </div>
 
+
+                {/* login form */}
                 <div className="form-container sign-in">
                     <form onSubmit={handleLogin}>
                         <h1>Sign In</h1>
