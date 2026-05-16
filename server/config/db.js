@@ -1,11 +1,7 @@
 const mysql = require('mysql2/promise');
-require('dotenv').config()
+require('dotenv').config();
 
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-});
+// 🚨 FIX: Pass the single MYSQL_URI directly to the pool
+const db = mysql.createPool(process.env.MYSQL_URI);
+
 module.exports = db;
