@@ -19,7 +19,7 @@ const errorHandler = (err, req, res, next) => {
 
     // 🚨 NEW: MYSQL ERRORS
     if (err.code === 'ER_NO_SUCH_TABLE') {
-        statusCode = 500;
+        statusCode = 500; // Keep 500, but send a clear message
         message = "Database Error: The required tables (products/inventory) do not exist in Aiven.";
     }
     if (err.code === 'ER_DUP_ENTRY') {
