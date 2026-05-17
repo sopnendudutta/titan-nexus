@@ -3,10 +3,13 @@ const errorHandler = (err, req, res, next) => {
         return next(err);
     }
 
+    // 🚨 THIS IS THE MAGIC LINE WE WERE MISSING:
+    console.error("🔥 CRITICAL BACKEND CRASH:", err);
+
     let statusCode = err.statusCode || 500;
     let message = err.message || "Internal Server Error";
 
-    // 🚨 MONGODB ERRORS
+    // MONGODB ERRORS
     if (err.code === 11000) {
         statusCode = 400;
         const field = Object.keys(err.keyValue)[0];
@@ -17,9 +20,9 @@ const errorHandler = (err, req, res, next) => {
         message = Object.values(err.errors).map(val => val.message).join(', ');
     }
 
-    // 🚨 NEW: MYSQL ERRORS
+    // MYSQL ERRORS
     if (err.code === 'ER_NO_SUCH_TABLE') {
-        statusCode = 500; // Keep 500, but send a clear message
+        statusCode = 500;
         message = "Database Error: The required tables (products/inventory) do not exist in Aiven.";
     }
     if (err.code === 'ER_DUP_ENTRY') {
